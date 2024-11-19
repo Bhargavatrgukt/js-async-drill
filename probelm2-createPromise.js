@@ -3,111 +3,100 @@ const path = require("path");
 
 const filePath = path.join(__dirname, "test", "lumpsum.txt");
 
-// Function to append a file name to a text file
-function appendFileName(filePath, fileName) {
+// Custom Promise wrappers for fs operations
+const readFileAsync = (filePath, encoding = "utf-8") => {
     return new Promise((resolve, reject) => {
-        fs.appendFile(filePath, fileName + "\n", (err) => {
+        fs.readFile(filePath, encoding, (err, data) => {
             if (err) {
-                reject(`Error appending filename: ${err}`);
+                reject(`Error reading file ${filePath}: ${err}`);
             } else {
-                console.log(`Filename added to filenames.txt: ${fileName}`);
-                resolve(); // Successfully appended
+                resolve(data);
             }
         });
     });
-}
+};
 
-// Function to write data to a file
-function writeDataToFile(data, fileName) {
+const writeFileAsync = (filePath, data) => {
     return new Promise((resolve, reject) => {
-        fs.writeFile(fileName, data, (err) => {
+        fs.writeFile(filePath, data, (err) => {
             if (err) {
-                reject(`${err}, error at writeDataToFile`);
+                reject(`Error writing to file ${filePath}: ${err}`);
             } else {
-                appendFileName("filenames.txt", fileName).then(() => {
-                    console.log("Data is created for content");
-                    resolve(fileName); // Resolve the filename after writing
-                }).catch(reject); // Handle appendFileName error
+                resolve(`File ${filePath} written successfully.`);
             }
         });
     });
-}
+};
 
-// Function to process the file content to lowercase and modify the sentence format
-function processUppercaseFile(fileName) {
+const appendFileAsync = (filePath, data) => {
     return new Promise((resolve, reject) => {
-        fs.readFile(fileName, "utf-8", (err, data) => {
+        fs.appendFile(filePath, data + "\n", (err) => {
             if (err) {
-                reject(err);
+                reject(`Error appending to file ${filePath}: ${err}`);
             } else {
-                let modifiedData = data.toLowerCase().split(". ").join("\n");
-                writeDataToFile(modifiedData, "lowercase_sentences.txt")
-                    .then(() => resolve("lowercase_sentences.txt"))
-                    .catch(reject);
+                resolve(`Data appended to file ${filePath}.`);
             }
         });
     });
-}
+};
 
-// Function to sort the content of a file
-function sortFileContent(filePath) {
+const unlinkFileAsync = (filePath) => {
     return new Promise((resolve, reject) => {
-        fs.readFile(filePath, "utf-8", (err, data) => {
+        fs.unlink(filePath, (err) => {
             if (err) {
-                reject(`Error reading file: ${err}`);
+                reject(`Error deleting file ${filePath}: ${err}`);
             } else {
-                let sortedData = data.split("\n").sort().join("\n");
-                writeDataToFile(sortedData, "sorted_sentences.txt")
-                    .then(() => resolve("sorted_sentences.txt"))
-                    .catch(reject);
+                resolve(`File ${filePath} deleted successfully.`);
             }
         });
     });
-}
+};
 
-// Function to delete files from the list in filenames.txt
-function deleteFilesFromList() {
-    return new Promise((resolve, reject) => {
-        fs.readFile("filenames.txt", "utf-8", (err, data) => {
-            if (err) {
-                reject(`Error reading filenames.txt: ${err}`);
-            } else {
-                let fileNames = data.split("\n").filter((fileName) => fileName.trim() !== "");
-                let deletionPromises = fileNames.map((fileName) => {
-                    return new Promise((delResolve, delReject) => {
-                        fs.unlink(fileName, (err) => {
-                            if (err) {
-                                delReject(`Error deleting file ${fileName}: ${err}`);
-                            } else {
-                                console.log(`Deleted file: ${fileName}`);
-                                delResolve();
-                            }
-                        });
-                    });
-                });
+// Main operations
+const writeDataToFile = (data, fileName) => {
+    return writeFileAsync(fileName, data)
+        .then(() => appendFileAsync("filenames.txt", fileName))
+        .then(() => fileName)
+        .catch((err) => Promise.reject(err));
+};
 
-                // Wait for all deletions to complete
-                Promise.all(deletionPromises)
-                    .then(() => resolve())
-                    .catch(reject);
-            }
-        });
-    });
-}
+const processUppercaseFile = (fileName) => {
+    return readFileAsync(fileName)
+        .then((data) => {
+            const modifiedData = data.toLowerCase().split(". ").join("\n");
+            return writeDataToFile(modifiedData, "lowercase_sentences.txt");
+        })
+        .catch((err) => Promise.reject(err));
+};
 
-// Main function to orchestrate the process
-function main(filePath) {
-    fs.readFile(filePath, "utf-8", (err, data) => {
-        if (err) {
-            console.log(`Error reading the input file: ${err}`);
-        } else {
-            writeDataToFile(data.toUpperCase(), "upperCase.txt")
-                .then((fileName) => processUppercaseFile(fileName))
-                .then(() => sortFileContent("lowercase_sentences.txt"))
-                .then(() => deleteFilesFromList())
-                .catch((err) => console.log(err));
-        }
-    });
-}
+const sortFileContent = (fileName) => {
+    return readFileAsync(fileName)
+        .then((data) => {
+            const sortedData = data.split("\n").sort().join("\n");
+            return writeDataToFile(sortedData, "sorted_sentences.txt");
+        })
+        .catch((err) => Promise.reject(err));
+};
+
+const deleteFilesFromList = () => {
+    return readFileAsync("filenames.txt")
+        .then((data) => {
+            const fileNames = data.split("\n").filter((fileName) => fileName.trim() !== "");
+            const deletionPromises = fileNames.map((fileName) => unlinkFileAsync(fileName));
+            return Promise.all(deletionPromises);
+        })
+        .catch((err) => Promise.reject(err));
+};
+
+// Main function
+const main = (filePath) => {
+    readFileAsync(filePath)
+        .then((data) => writeDataToFile(data.toUpperCase(), "upperCase.txt"))
+        .then((fileName) => processUppercaseFile(fileName))
+        .then(() => sortFileContent("lowercase_sentences.txt"))
+        .then(() => deleteFilesFromList())
+        .then(() => console.log("All operations completed successfully."))
+        .catch((err) => console.error(err));
+};
 
 main(filePath);

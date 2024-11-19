@@ -1,35 +1,52 @@
 const fs = require('node:fs/promises');
-const path=require("path");
+const path = require("path");
 
-const filePath=path.join(__dirname,"test","randomJSON","promiseDir")
+const filePath = path.join(__dirname, "test", "randomJSON", "promiseDir");
 
-// 1. Create a directory of random JSON files
-// 2. Delete those files simultaneously 
-
-const createAndDeleteJSONFiles=(filePath)=>{
-   fs.mkdir(filePath,{recursive:true})
-   .then(()=>console.log("Directory is created"))
-   .catch(()=> console.log("Error at direactroy creation"))
-   .then(()=>{
-    const filesToCreate = 5; // Number of JSON files I take 5 here 
-
+const createJSONFiles = (filePath, filesToCreate) => {
+    const filePromises = [];
     for (let i = 0; i < filesToCreate; i++) {
         const filePathRando = path.join(filePath, `file${i + 1}.json`);
         const data = { id: i + 1, value: Math.random() };
-        fs.writeFile(filePathRando,JSON.stringify(data))
-        .then(()=>{
-            console.log(`file ${filePathRando} is created`)
-            fs.unlink(filePathRando)
-            .then(()=>console.log(`file ${filePathRando} is deleted`))
-            .catch((err)=>console.log(`${err} error at file ${filePathRando} is deleted`))
-        })
-        .catch((err)=>console.log(`${err} , errMsg at writing file`))
+
+        const writePromise = fs.writeFile(filePathRando, JSON.stringify(data))
+            .then(() => {
+                console.log(`File ${filePathRando} is created`);
+                return filePathRando; // Return the file path for deletion
+            });
+        filePromises.push(writePromise);
     }
-   })
-   .catch((err)=>console.log(`${err},errMsg at file creationAndDeletionOperation`))
-}
+    return Promise.all(filePromises); // Resolves with an array of file paths
+};
 
+const deleteJSONFiles = (filePaths) => {
+    const deletePromises = filePaths.map((filePath) => {
+        return fs.unlink(filePath)
+            .then(() => console.log(`File ${filePath} is deleted`))
+            .catch((err) => {
+                console.log(`Error deleting file ${filePath}: ${err}`);
+                return Promise.reject(err); // Propagate the error
+            });
+    });
+    return Promise.all(deletePromises); // Wait for all deletions to complete
+};
 
+const createAndDeleteJSONFiles = (filePath) => {
+    fs.mkdir(filePath, { recursive: true })
+        .then(() => {
+            console.log("Directory is created");
+            return createJSONFiles(filePath, 5); // Create 5 JSON files
+        })
+        .then((filePaths) => {
+            console.log("All files are created. Starting deletion...");
+            return deleteJSONFiles(filePaths); // Delete all created files
+        })
+        .then(() => {
+            console.log("All files have been deleted successfully");
+        })
+        .catch((err) => {
+            console.log(`Error in the operation: ${err}`);
+        });
+};
 
-createAndDeleteJSONFiles(filePath)
-
+createAndDeleteJSONFiles(filePath);
